@@ -4,14 +4,16 @@
 async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { role: 'GUEST', email: '', isMaster: false };
-  const { data, error } = await supabase.from(TABLES.users).select('*').eq('email', user.email).single();
+
+  // نستخدم .single() هنا لأن البريد الإلكتروني فريد لكل مستخدم
+  const { data, error } = await supabase.from(TABLES.users).select('*').eq('email', user.email).maybeSingle(); 
+  
   if (!error && data) {
     return {
       role: data.role || 'USER',
       email: user.email,
       name: data.name || user.email,
-      isMaster: data.is_master || false
-    };
+      isMaster: data.is_master || false    };
   }
   // إذا لم يكن في جدول users أضفه كمستخدم عادي
   await supabase.from(TABLES.users).insert({
@@ -27,7 +29,36 @@ async function getCurrentUser() {
     isMaster: false
   };
 }
+// أضف هذه الدالة في ملف auth.js
+async function getAllUsers() {
+  const { data, error } = await supabase
+    .from('users') // تأكد أن اسم الجدول هنا هو نفس الموجود في قاعدة بياناتك
+    .select('*');
 
+  if (error) {
+    showToast('خطأ في جلب قائمة المستخدمين: ' + error.message, false);
+    return [];
+  }
+  
+  return data; // ستعيد لك كل الصفوف الموجودة في الجدول
+}
+async function renderUsersList() {
+  const users = await getAllUsers(); // استدعاء الدالة الجديدة
+  const container = document.getElementById('users-table-body'); // تأكد من وجود tbody بهذا الـ ID
+  
+  if (users.length === 0) {
+    container.innerHTML = '<tr><td colspan="3">لا يوجد مستخدمين حالياً</td></tr>';
+    return;
+  }
+
+  container.innerHTML = users.map(user => `
+    <tr>
+      <td>${user.name}</td>
+      <td>${user.email}</td>
+      <td>${user.role}</td>
+    </tr>
+  `).join('');
+}
 // تسجيل الدخول
 async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
