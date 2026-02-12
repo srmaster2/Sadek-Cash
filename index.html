@@ -2007,6 +2007,7 @@
 				<li class="nav-item"><a class="nav-link active" data-op-tab="new-op-tab" onclick="showOpTab(this)">عملية جديدة</a></li>
 				<li class="nav-item"><a class="nav-link" data-op-tab="log-op-tab" onclick="showOpTab(this)">سجل العمليات</a></li>
 				  <li class="nav-item"><a class="nav-link" onclick="showView('counter')"><i class="fa fa-money-bill-1"></i> عد النقدية</a></li>
+
 			</ul>	 
 			
 <div id="new-op-tab" class="op-tab-content">
@@ -2370,8 +2371,6 @@
         <div id="denominations-container" class="row g-2"></div>
     </div>
 	    </div>
-			    </div>
-
 <div id="inventory-tab-logs" style="display: none;">
     <div class="card-box shadow-sm border-0 mb-3 bg-light">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -2388,6 +2387,7 @@
         <div id="inventory-logs-list" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
 </div>
+	    </div>
 
 <div id="logDetailsModal" class="log-modal-overlay" onclick="closeLogModalOutside(event)">
     <div class="log-modal-content">
@@ -3089,31 +3089,21 @@ window.onload = async function() {
 		}
 function showOpTab(btn) {
     const targetId = btn.getAttribute('data-op-tab');
-    const targetElement = document.getElementById(targetId);
-
-    if (!targetElement) {
-        console.error("التبويب غير موجود:", targetId);
-        return;
-    }
-
-    // 1. إخفاء محتويات التبويبات الخاصة بالعمليات فقط
-    document.querySelectorAll('.op-tab-content').forEach(t => t.style.display = 'none');
     
-    // 2. إظهار التبويب المختار
-    targetElement.style.display = 'block';
+    // إخفاء الكل وإظهار التاب المطلوب
+    document.querySelectorAll('.op-tab-content').forEach(t => t.style.display = 'none');
+    document.getElementById(targetId).style.display = 'block';
 
-    // 3. تحديث شكل الأزرار داخل قائمة العمليات فقط
-    const parentUl = btn.closest('.nav-pills');
-    if (parentUl) {
-        parentUl.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-    }
+    // تحديث شكل الزراير
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     btn.classList.add('active');
 
-    // 4. تحميل البيانات عند الحاجة
+    // التحميل فقط عند الضغط على سجل العمليات
     if (targetId === 'log-op-tab') {
-        loadTimelineData();
+        loadTimelineData(); // نداء واحد فقط
     }
-}		// 💡 دالة تحميل سجل العمليات (مصححة لترتيب الأعمدة)
+}
+		// 💡 دالة تحميل سجل العمليات (مصححة لترتيب الأعمدة)
 async function getTransactionLogs(filters = {}) {
     try {
         let query = supabase.from('transactions').select('*');
