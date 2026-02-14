@@ -176,10 +176,13 @@
         <label for="email">البريد الإلكتروني</label>
         <input type="email" id="email" placeholder="user@example.com" required>
       </div>
-      <div class="form-group">
-        <label for="password">كلمة المرور</label>
-        <input type="password" id="password" placeholder="كلمة المرور" required>
-      </div>
+<div class="form-group">
+  <label for="password">كلمة المرور</label>
+  <input type="password" id="password" placeholder="كلمة المرور" required>
+  <div style="text-align: left; margin-top: 8px;">
+    <a href="javascript:void(0)" onclick="forgotPassword()" style="color: #94a3b8; font-size: 0.8rem; text-decoration: none; transition: 0.3s;">نسيت كلمة المرور؟</a>
+  </div>
+</div>
       <button class="btn-login" onclick="login()">تسجيل الدخول</button>
       <button class="btn-signup" onclick="toggleSignup()">إنشاء حساب جديد</button>
     </div>
@@ -293,6 +296,23 @@
         window.location.replace('index.html');
       }
     });
+    async function forgotPassword() {
+  const email = document.getElementById('email').value;
+  if (!email) {
+    showToast('يرجى كتابة البريد الإلكتروني أولاً في خانة تسجيل الدخول', false);
+    return;
+  }
+
+  const { error } = await window.supa.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + 'https://srmaster2.github.io/Sadek-Cash/reset-password.html',
+  });
+
+  if (error) {
+    showToast('خطأ: ' + error.message, false);
+  } else {
+    showToast('تم إرسال رابط إعادة التعيين إلى بريدك الإلكتروني بنجاح');
+  }
+}
   </script>
 </body>
 </html>
