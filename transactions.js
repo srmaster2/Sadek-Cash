@@ -3,13 +3,38 @@
 // ملاحظة: searchTimeout, loadClientsToSelect, getTransactionLogs
 //         كلهم معرّفين في utils.js بس — مش هنا
 // ============================================================
-
+let dynamicLockList = []; // سيتم ملؤها تلقائياً بأسماء الشركات من قاعدة البيانات
 var globalPendingData = null;
 var selectedProvider  = "";
 var isRenderingPins   = false;
 
 const _supa = () => window.supa;
+// دالة لتفعيل الاستماع اللحظي
+function setupLiveLogs() {
+    const supabase = _supa(); // استدعاء نسخة سوبابيز الخاصة بك
 
+    supabase
+        .channel('public:transactions') // اسم القناة
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'transactions' // تأكد أن هذا هو اسم جدول العمليات عندك
+        }, (payload) => {
+            console.log('New transaction detected!', payload.new);
+            // عند حدوث عملية إدخال جديدة، نقوم بتحديث الجدول فوراً
+            executeAdvancedSearch(); 
+            
+            // اختياري: إظهار إشعار صغير (Toast)
+            showToast("تم إضافة عملية جديدة بنجاح", "success");
+        })
+        .subscribe();
+}
+
+// استدعاء الدالة عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', () => {
+    setupLiveLogs();
+    executeAdvancedSearch(); // تحميل البيانات لأول مرة
+});
 async function getSession() {
     const { data } = await _supa().auth.getSession();
     return data.session;
@@ -25,43 +50,51 @@ function setOp(typeValue, provider, element) {
     if (typeInput) typeInput.value = typeValue;
     selectedProvider = provider || "";
 
-    document.querySelectorAll('.op-card').forEach(c =>
-        c.classList.remove('active','active-op'));
+    document.querySelectorAll('.op-card').forEach(c => c.classList.remove('active','active-op'));
     if (element) element.classList.add('active','active-op');
 
-    const lockList = ['فوري','مكسب','مشتريات','أمان','ضامن','2090'];
-    const target   = _norm(provider);
-    const isLockOp = lockList.some(p => _norm(p) === target) &&
+    const target = _norm(provider);
+    
+    // التحقق هل الشركة من ضمن قائمة الشركات الديناميكية؟
+    const isLockOp = dynamicLockList.some(p => _norm(p) === target) &&
                      (typeValue.includes("سحب") || typeValue.includes("فاتورة"));
 
     if (isLockOp && walletSelect) {
+        let found = false;
         for (let i = 0; i < walletSelect.options.length; i++) {
             if (_norm(walletSelect.options[i].text).includes(target)) {
-                walletSelect.selectedIndex = i; break;
+                walletSelect.selectedIndex = i;
+                found = true;
+                break;
             }
         }
-        walletSelect.disabled = true;
-        walletSelect.style.backgroundColor = "var(--bg-body)";
-        walletSelect.style.cursor = "not-allowed";
+        
+        if (found) {
+            walletSelect.disabled = true;
+            walletSelect.style.backgroundColor = "var(--bg-body)";
+            walletSelect.style.cursor = "not-allowed";
+        }
     } else if (walletSelect) {
         walletSelect.disabled = false;
         walletSelect.style.backgroundColor = "";
         walletSelect.style.cursor = "default";
-        if (!lockList.some(p => _norm(p) === target))
-            walletSelect.selectedIndex = 0;
+        
+        // إذا لم تكن شركة مسجلة، نعود للخيار الافتراضي
+        if (!dynamicLockList.some(p => _norm(p) === target)) {
+             walletSelect.selectedIndex = 0;
+        }
     }
 
     _toggleOpFields(typeValue);
     if (typeof updateLimitDisplay === "function") updateLimitDisplay();
-    if (typeof toggleClientField  === "function") toggleClientField();
     walletSelect?.dispatchEvent(new Event('change'));
 
+    // توجيه المستخدم لمبلغ العملية
     setTimeout(() => {
         const f = document.getElementById('amount');
         if (f) { f.scrollIntoView({ behavior:'smooth', block:'center' }); f.focus(); }
     }, 400);
 }
-
 function _norm(txt) {
     return txt ? String(txt).replace(/[أإآا]/g,'ا').replace(/\s+/g,'').trim().toLowerCase() : "";
 }
@@ -105,19 +138,30 @@ const serviceMap = {
     }
 };
 
-// ألوان الشركات (بتتطبق على أي شركة موجودة في Supabase تلقائي)
-const providerColors = {
-    'فوري':      '#ff6b00',
-    'مكسب':      '#00a651',
-    'أمان':      '#1a56db',
-    'ضامن':      '#7c3aed',
-    '2090':      '#0f172a',
-    'مشتريات':  '#dc2626'
-};
 
-// ============================================================
-// openProviderSelect — يجيب الشركات من Supabase أوتوماتيك
-// ============================================================
+function getProviderGradient(name) {
+    const presets = {
+        'فوري': ['#dfdb0d', '#dfdb0d'],
+        'أمان': ['#21bce2', '#0ea5e9'],
+        'مكسب': ['#153d96', '#1e40af'],
+        'ضامن': ['#7c3aed', '#5b21b6'],
+        'بساطة': ['#dc2626', '#ef4444'],
+        'مشتريات': ['#e29c04', '#e29c04'],
+        '2090': ['#1e293b', '#475569']
+    };
+
+    if (presets[name]) {
+        return `linear-gradient(135deg, ${presets[name][0]}, ${presets[name][1]})`;
+    }
+
+    // توليد لون عشوائي ذكي لأي شركة جديدة تضاف مستقبلاً
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    const h = Math.abs(hash) % 360;
+    return `linear-gradient(135deg, hsl(${h}, 75%, 40%), hsl(${h}, 75%, 30%))`;
+}
+
+// 3. دالة فتح اختيار الشركة (تحديث القائمة + رسم الكروت)
 async function openProviderSelect(serviceKey, element) {
     // تمييز الكارت المختار
     document.querySelectorAll('.op-card').forEach(c => c.classList.remove('active','active-op'));
@@ -127,109 +171,87 @@ async function openProviderSelect(serviceKey, element) {
     if (!config) return;
 
     document.getElementById('selectedServiceKey').value = serviceKey;
-
     const grid = document.getElementById('providerButtonsGrid');
     const modal = document.getElementById('providerModal');
     if (!grid || !modal) return;
 
-    // عرض loading
-    grid.innerHTML = '<div class="text-center p-3"><i class="fa fa-circle-notch fa-spin fa-2x text-primary"></i></div>';
+    grid.innerHTML = '<div class="text-center p-4"><i class="fa fa-circle-notch fa-spin fa-3x text-primary"></i></div>';
     modal.style.display = 'flex';
 
     try {
-        // جيب الشركات من Supabase (daily_out_limit > 9M = شركة)
-const { data: companies, error } = await _supa()
-    .from('accounts')
-    .select('id, name, balance, tag, color')
-    .gt('daily_out_limit', 9000000)
-    .not('name', 'ilike', '%خزنة%') // استبعاد أي اسم يحتوي على كلمة خزنة
-    .not('name', 'ilike', '%كاش%')  // استبعاد أي اسم يحتوي على كلمة كاش
-    .order('name');
+        const { data: companies, error } = await _supa()
+            .from('accounts')
+            .select('id, name, balance')
+            .gt('daily_out_limit', 9000000)
+            .not('name', 'ilike', '%خزنة%')
+            .not('name', 'ilike', '%كاش%')
+            .order('name');
+
         if (error) throw error;
 
+        // تحديث مصفوفة الشركات للربط التلقائي
+        dynamicLockList = companies ? companies.map(c => c.name) : [];
         grid.innerHTML = '';
 
-        if (!companies || companies.length === 0) {
-            grid.innerHTML = '<div class="text-center text-muted p-3">لا توجد شركات مضافة</div>';
+        if (dynamicLockList.length === 0) {
+            grid.innerHTML = '<div class="p-4 text-center text-muted">لا توجد شركات مسجلة حالياً</div>';
             return;
         }
 
-        companies.forEach(function(company) {
+        companies.forEach(company => {
             const btn = document.createElement('button');
             btn.type = 'button';
-
-            // لون الشركة: من providerColors أو من color في الـ DB أو افتراضي
-            const color = providerColors[company.name] || company.color || '#475569';
-
+            btn.className = 'provider-card';
+            
+            const gradient = getProviderGradient(company.name);
             const bal = Number(company.balance || 0);
-            const balText = bal.toLocaleString();
-            const balColor = bal < 0 ? '#ef4444' : '#10b981';
-
-            btn.style.cssText = [
-                'display:flex',
-                'align-items:center',
-                'justify-content:space-between',
-                'width:100%',
-                'padding:12px 16px',
-                'border-radius:12px',
-                'border:2px solid ' + color + '33',
-                'background:' + color + '11',
-                'cursor:pointer',
-                'transition:all 0.2s',
-                'margin-bottom:8px'
-            ].join(';');
-
-            btn.innerHTML = [
-                '<div style="display:flex;align-items:center;gap:10px;">',
-                    '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0;"></div>',
-                    '<div style="text-align:right;">',
-                        '<div style="font-weight:800;font-size:14px;color:' + color + ';">' + company.name + '</div>',
-                        '<div style="font-size:10px;color:#64748b;">رصيد: <span style="color:' + balColor + ';font-weight:700;">' + balText + '</span> ج.م</div>',
-                    '</div>',
-                '</div>',
-                '<i class="fa fa-chevron-left" style="color:' + color + ';opacity:0.6;"></i>'
-            ].join('');
-
-            btn.onmouseenter = function() {
-                btn.style.borderColor = color;
-                btn.style.background  = color + '22';
-                btn.style.transform   = 'translateX(-3px)';
-            };
-            btn.onmouseleave = function() {
-                btn.style.borderColor = color + '33';
-                btn.style.background  = color + '11';
-                btn.style.transform   = 'none';
-            };
-
-            btn.onclick = function() {
-                confirmProviderSelection(serviceKey, company.name);
-            };
-
+            const formattedBal = bal.toLocaleString();
+            const walletIconColor = bal < 0 ? '#ffcfcf' : '#ffffff';
+            btn.style.background = gradient;
+            btn.innerHTML = `
+<div class="provider-info">
+        <span class="provider-name">${company.name}</span>
+        <div class="balance-badge">
+            <i class="fa fa-wallet" style="color: ${walletIconColor}; font-size: 12px;"></i>
+            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                <span class="balance-label">الرصيد المتاح</span>
+                <span class="balance-amount">${formattedBal} <small style="font-size: 9px;">ج.م</small></span>
+            </div>
+        </div>
+    </div>
+    <i class="fa fa-university provider-icon-bg"></i>
+    <div style="z-index: 2; display: flex; align-items: center; gap: 10px;">
+        <i class="fa fa-chevron-left" style="font-size: 12px; opacity: 0.7;"></i>
+    </div>
+`;
+            btn.onclick = () => confirmProviderSelection(serviceKey, company.name);
             grid.appendChild(btn);
         });
 
     } catch(e) {
-        console.error('openProviderSelect error:', e);
-        grid.innerHTML = '<div class="text-center text-danger p-3">خطأ في تحميل الشركات</div>';
+        console.error('Fetch Error:', e);
+        grid.innerHTML = '<div class="alert alert-danger mx-3">فشل تحميل بيانات الشركات</div>';
     }
 }
-
 // ============================================================
 // confirmProviderSelection — يضبط العملية ويغلق المودال
 // ============================================================
+function _norm(txt) {
+    return txt ? String(txt).replace(/[أإآا]/g,'ا').replace(/\s+/g,'').trim().toLowerCase() : "";
+}
+
 function confirmProviderSelection(serviceKey, provider) {
     const config = serviceMap[serviceKey];
     if (!config) return;
+    
+    // إغلاق المودال
+    const modal = document.getElementById('providerModal');
+    if (modal) modal.style.display = 'none';
 
-    const opTitle = config.buildTitle(provider);
-
-    closeProviderModal();
-
-    // تمييز الكارت الأصلي
-    const originalCard = document.querySelector('.op-card[onclick*="' + serviceKey + '"]');
-    setOp(opTitle, provider, originalCard);
+    // استهداف الكارت الأصلي وتفعيل setOp
+    const originalCard = document.querySelector(`.op-card[onclick*="${serviceKey}"]`);
+    setOp(config.buildTitle(provider), provider, originalCard);
 }
-
 function closeProviderModal() {
     const modal = document.getElementById('providerModal');
     if (modal) modal.style.display = 'none';
@@ -784,37 +806,83 @@ var resetTransactionForm = resetSystemInterface;
 function renderTransactionsTable(data) {
     const container = document.getElementById('timelineContainer');
     if (!container) return;
+
     if (!data || !data.length) {
         container.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">لا توجد بيانات</td></tr>';
         return;
     }
+
     let i = 1;
     container.innerHTML = data.map(tx => {
-        const isOut = /سحب|صادر/.test(tx.type || '');
+        // 1. تحديد نوع العملية (وارد/صادر) بناءً على منطقك القديم
+        const isOut = /سحب|صادر|مصروف|فاتورة/.test(tx.type || '');
+        
+        // 2. فحص إذا كانت العملية "لحظية" (تمت منذ أقل من 10 ثوانٍ) لإضافة ومضة
+        const txTime = new Date(tx.created_at || new Date()); 
+        const isLive = (new Date() - txTime) < 10000;
+        const liveClass = isLive ? 'new-row-flash' : '';
+
         return `
-            <tr>
-                <td>${i++}</td>
-                <td class="english-num small">${tx.date||'-'} ${tx.time||''}</td>
-                <td class="${isOut?'text-danger':'text-success'} fw-bold">${tx.type||'-'}</td>
-                <td class="english-num fw-bold">
-                    ${Number(tx.amount||0).toLocaleString()}
-                    ${tx.commission ? `<br><small class="text-warning">عمولة: ${Number(tx.commission).toLocaleString()}</small>` : ''}
+            <tr class="${liveClass}">
+                <td class="align-middle">${i++}</td>
+                
+                <td class="align-middle english-num small text-nowrap">
+                    <div class="fw-bold">${tx.date || '-'}</div>
+                    <div class="text-muted" style="font-size: 10px;">${tx.time || ''}</div>
                 </td>
-                <td class="english-num text-primary">${Number(tx.balance_after||0).toLocaleString()}</td>
-                <td class="small">${tx.notes||'-'}</td>
-                <td class="small">${tx.added_by||'-'}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="showDetails(${tx.id})">
-                        <i class="fa fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger admin-only ms-1" onclick="rollbackTx(${tx.id})">
-                        <i class="fa fa-undo"></i>
-                    </button>
+                
+                <td class="align-middle ${isOut ? 'text-danger' : 'text-success'} fw-bold">
+                    <i class="fa ${isOut ? 'fa-arrow-up' : 'fa-arrow-down'} me-1" style="font-size: 10px;"></i>
+                    ${tx.type || '-'}
+                </td>
+                
+                <td class="align-middle english-num fw-bold">
+                    <div>${Number(tx.amount || 0).toLocaleString()}</div>
+                    ${tx.commission ? `<small class="text-warning fw-normal" style="font-size: 10px;">عمولة: ${Number(tx.commission).toLocaleString()}</small>` : ''}
+                </td>
+                
+                <td class="align-middle english-num text-primary fw-bold">
+                    ${Number(tx.balance_after || 0).toLocaleString()}
+                </td>
+                
+                <td class="align-middle small text-muted" style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">
+                    ${tx.notes || '-'}
+                </td>
+                
+                <td class="align-middle">
+                    <span class="badge bg-light text-dark border fw-normal">
+                        <i class="fa fa-user-circle me-1 text-secondary"></i>${tx.added_by || '-'}
+                    </span>
+                </td>
+                
+                <td class="align-middle">
+                    <div class="d-flex justify-content-center gap-1">
+                        <button class="btn btn-sm btn-outline-secondary border-0" onclick="showDetails(${tx.id})" title="عرض">
+                            <i class="fa fa-eye"></i>
+                        </button>
+                        
+                        <button class="btn btn-sm btn-outline-danger admin-only border-0" onclick="rollbackTx(${tx.id})" title="تراجع">
+                            <i class="fa fa-undo"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>`;
     }).join('');
+}// دالة لتنسيق التاريخ والوقت بشكل احترافي
+function formatDate(dateString) {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    
+    // تنسيق الوقت (الساعة:الدقيقة AM/PM)
+    const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+    const time = date.toLocaleTimeString('en-US', timeOptions);
+    
+    // تنسيق التاريخ (يوم/شهر)
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    
+    return `${day}/${month} | ${time}`;
 }
-
 function executeAdvancedSearch() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(async () => {
