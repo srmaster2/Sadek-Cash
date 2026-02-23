@@ -1377,14 +1377,10 @@ body.light-mode .dashboard-title {
 }
 
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
 }
-
 @media (max-width: 768px) {
   .sidebar-wrapper {
     position: fixed;
@@ -3158,4 +3154,102 @@ body:not(.light-mode) .wlt-track {
 .container-hover:hover {
     background-color: #6b6666;
     transition: 0.2s;
+}
+/* تصميم كروت الشركات الاحترافية */
+.provider-card {
+    position: relative;
+    overflow: hidden;
+    border: none !important;
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    margin-bottom: 12px;
+    height: 75px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-radius: 16px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.provider-card:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    filter: brightness(1.1);
+}
+
+.provider-card::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: -20px;
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+}
+
+.provider-info {
+    z-index: 2;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+}
+
+.provider-name {
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 2px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* كبسولة الرصيد الاحترافية */
+.balance-badge {
+    background: rgba(14, 13, 13, 0.15); /* خلفية بيضاء شفافة */
+    backdrop-filter: blur(5px); /* تأثير زجاجي */
+    padding: 4px 10px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+}
+
+.balance-amount {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+}
+
+.balance-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+/* حركة بسيطة للأيقونة عند الوقوف على الكارت */
+.provider-card:hover .fa-wallet {
+    transform: scale(1.2) rotate(-10deg);
+    transition: 0.3s;
+}
+.provider-icon-bg {
+    position: absolute;
+    left: 15px;
+    font-size: 32px;
+    opacity: 0.2;
+    z-index: 1;
+}
+@keyframes highlightNewRow {
+    0% { background-color: #d1fae5; } /* لون أخضر فاتح */
+    100% { background-color: transparent; }
+}
+
+.new-row-flash {
+    animation: highlightNewRow 2s ease-out;
 }
