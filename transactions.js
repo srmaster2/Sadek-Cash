@@ -141,12 +141,12 @@ const serviceMap = {
 
 function getProviderGradient(name) {
     const presets = {
-        'فوري': ['#dfdb0d', '#dfdb0d'],
+        'فوري': ['#ff6b00', '#ff8f00'],
         'أمان': ['#21bce2', '#0ea5e9'],
         'مكسب': ['#153d96', '#1e40af'],
         'ضامن': ['#7c3aed', '#5b21b6'],
         'بساطة': ['#dc2626', '#ef4444'],
-        'مشتريات': ['#e29c04', '#e29c04'],
+        'مشتريات': ['#059669', '#10b981'],
         '2090': ['#1e293b', '#475569']
     };
 
@@ -204,26 +204,18 @@ async function openProviderSelect(serviceKey, element) {
             btn.className = 'provider-card';
             
             const gradient = getProviderGradient(company.name);
-            const bal = Number(company.balance || 0);
-            const formattedBal = bal.toLocaleString();
-            const walletIconColor = bal < 0 ? '#ffcfcf' : '#ffffff';
+            const bal = Number(company.balance || 0).toLocaleString();
+
             btn.style.background = gradient;
             btn.innerHTML = `
-<div class="provider-info">
-        <span class="provider-name">${company.name}</span>
-        <div class="balance-badge">
-            <i class="fa fa-wallet" style="color: ${walletIconColor}; font-size: 12px;"></i>
-            <div style="display: flex; flex-direction: column; align-items: flex-start;">
-                <span class="balance-label">الرصيد المتاح</span>
-                <span class="balance-amount">${formattedBal} <small style="font-size: 9px;">ج.م</small></span>
-            </div>
-        </div>
-    </div>
-    <i class="fa fa-university provider-icon-bg"></i>
-    <div style="z-index: 2; display: flex; align-items: center; gap: 10px;">
-        <i class="fa fa-chevron-left" style="font-size: 12px; opacity: 0.7;"></i>
-    </div>
-`;
+                <div class="provider-info">
+                    <span class="provider-name">${company.name}</span>
+                    <span class="provider-balance"><i class="fa fa-wallet"></i> رصيد: ${bal} ج.م</span>
+                </div>
+                <i class="fa fa-university provider-icon-bg"></i>
+                <i class="fa fa-chevron-left" style="z-index:2; font-size: 14px; opacity:0.8"></i>
+            `;
+
             btn.onclick = () => confirmProviderSelection(serviceKey, company.name);
             grid.appendChild(btn);
         });
@@ -232,25 +224,6 @@ async function openProviderSelect(serviceKey, element) {
         console.error('Fetch Error:', e);
         grid.innerHTML = '<div class="alert alert-danger mx-3">فشل تحميل بيانات الشركات</div>';
     }
-}
-// ============================================================
-// confirmProviderSelection — يضبط العملية ويغلق المودال
-// ============================================================
-function _norm(txt) {
-    return txt ? String(txt).replace(/[أإآا]/g,'ا').replace(/\s+/g,'').trim().toLowerCase() : "";
-}
-
-function confirmProviderSelection(serviceKey, provider) {
-    const config = serviceMap[serviceKey];
-    if (!config) return;
-    
-    // إغلاق المودال
-    const modal = document.getElementById('providerModal');
-    if (modal) modal.style.display = 'none';
-
-    // استهداف الكارت الأصلي وتفعيل setOp
-    const originalCard = document.querySelector(`.op-card[onclick*="${serviceKey}"]`);
-    setOp(config.buildTitle(provider), provider, originalCard);
 }
 function closeProviderModal() {
     const modal = document.getElementById('providerModal');
