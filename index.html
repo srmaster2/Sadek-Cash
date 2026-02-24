@@ -17,14 +17,13 @@
 
 <script src="utils.js" defer></script>
 <script src="auth.js" defer></script>
-
 <script src="accounts.js" defer></script>
 <script src="transactions.js" defer></script>
 
 <script src="reports.js" defer></script>
-
-<script src="members.js" defer></script>
+<script src="branches.js"></script>   <!-- ← أضف هذا -->
 <script src="app.js" defer></script>
+<script src="members.js" defer></script>
 </head>
 <body>
 <header class="app-header-main">
@@ -38,11 +37,14 @@
         <i class="fa-solid fa-shield-halved header-icon"></i>
         <h1 class="main-title">CASH <span class="cash-style">EXPRESS</span></h1>
     </div>     
-</div>            <div class="header-left">
+</div>       
+     <div class="header-left">
                 <div class="header-buttons">
                     <div class="user-info-box d-none d-md-flex">
                         <span class="welcome-tag">أهلاً بك،</span>
                         <span id="user-display-name" class="user-name-text">...</span>
+                        <div id="current-branch-badge" class="me-2"></div>
+
                     </div>
                     <div class="icon-btn" onclick="showNotifications()"><i class="fa-regular fa-bell"></i></div>
                     <div class="icon-btn" onclick="toggleTheme()"><i class="fa fa-moon"></i></div>
@@ -99,6 +101,7 @@
 
 <main class="content-area">
     <div id="view-dash" class="view-section active">
+        <div id="dashBranchFilter" style="display:none;"></div>
         <div id="dashContent">
             <div class="text-center p-5 text-muted"><i class="fa fa-circle-notch fa-spin fa-2x mb-3"></i><br>جاري جلب التقارير...</div>
         </div>
@@ -293,7 +296,7 @@
 					<li class="nav-item"><a class="nav-link" data-tab="accounts-tab" onclick="showManageTab(this)"><i class="fa fa-cogs"></i> الحسابات</a></li>
 					<li class="nav-item"><a class="nav-link" data-tab="users-tab" onclick="showManageTab(this)"><i class="fa fa-user-friends"></i> الأعضاء</a></li>
 					<li class="nav-item"><a class="nav-link" data-tab="logs-tab" onclick="showManageTab(this)"><i class="fa fa-clipboard-list"></i> السجل</a></li>
-				</ul>
+                    <li class="nav-item admin-only-section"><a class="nav-link" data-tab="branches-tab" onclick="showManageTab(this)"> <i class="fa fa-building"></i> الفروع </a></li></ul>
 
 <div id="clients-tab" class="manage-tab-content">
     <div class="card-box mb-3 shadow-sm border-0">
@@ -392,6 +395,72 @@
 				</div>
 
 			  </div>
+<div id="branches-tab" class="manage-tab-content" style="display:none;">
+
+    <!-- هيدر الفروع -->
+    <div class="d-flex justify-content-between align-items-center mb-3" style="direction:rtl;">
+        <h6 class="fw-bold m-0 small" style="color:var(--card-text);">
+            <i class="fa fa-building text-primary me-1"></i> الفروع المسجلة
+        </h6>
+        <button id="addBranchBtn" class="btn-main px-3"
+                style="width:auto;font-size:12px;padding:6px 14px;border-radius:10px;display:none;"
+                onclick="openAddBranchModal()">
+            <i class="fa fa-plus me-1"></i> فرع جديد
+        </button>
+    </div>
+
+    <!-- قائمة الفروع -->
+    <div id="branchesList" class="mb-3">
+        <div class="text-center p-4 text-muted small">جاري التحميل...</div>
+    </div>
+
+    <!-- تعيين موظف لفرع (مدير عام + مدير فرع) -->
+    <div id="assignSection" class="card-box shadow-sm border-0 mb-3" style="display:none;">
+        <h6 class="fw-bold mb-3 small" style="color:var(--card-text);">
+            <i class="fa fa-user-tag text-primary me-1"></i> تعيين موظف لفرع
+        </h6>
+        <div class="row g-2">
+            <div class="col-12">
+                <label class="form-label small fw-bold text-muted mb-1">اختر الموظف</label>
+                <select id="assignUserSelect" class="form-select form-select-sm">
+                    <option value="">-- اختر موظف --</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <label class="form-label small fw-bold text-muted mb-1">اختر الفرع</label>
+                <select id="assignBranchSelect" class="form-select form-select-sm">
+                    <option value="">-- اختر فرع --</option>
+                </select>
+            </div>
+            <div class="col-12 mt-1">
+                <button class="btn-main" onclick="handleAssignUserToBranch()">
+                    <i class="fa fa-check me-1"></i> تعيين
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ملخص الفروع (مدير عام فقط) -->
+        <div id="branchesSummarySection" class="card-box shadow-sm border-0" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold m-0 small" style="color:var(--card-text);">
+                    <i class="fa fa-chart-bar text-primary me-1"></i> ملخص الفروع
+            </h6>
+            <button class="btn btn-sm btn-light border" onclick="renderBranchesSummary()"
+                    style="font-size:11px;border-radius:8px;">
+                <i class="fa fa-rotate-right me-1"></i> تحديث
+            </button>
+        </div>
+        <div id="branches-summary-container">
+            <div class="text-center p-3 text-muted small">
+                <i class="fa fa-chart-bar me-1 opacity-50"></i>
+                اضغط تحديث لعرض الإحصائيات
+            </div>
+        </div>
+    </div>
+
+</div>
+
 <div id="view-counter" class="view-section">
     
 <div class="d-flex gap-2 mb-3 px-2">
