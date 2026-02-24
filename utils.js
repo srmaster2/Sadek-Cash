@@ -41,10 +41,13 @@ async function loadWallets() {
     if (!select) return;
     select.innerHTML = '<option>جاري التحميل...</option>';
     try {
-        const { data: accounts, error } = await window.supa
+        const user = window.currentUserData;
+        let query = window.supa
             .from('accounts')
             .select('id, name, balance, daily_out_limit, daily_in_limit, monthly_limit, daily_out_usage, daily_in_usage, monthly_usage_out')
             .order('name');
+        if (typeof applyBranchFilter === 'function') query = applyBranchFilter(query, user);
+        const { data: accounts, error } = await query;
 
         if (error) throw error;
 
@@ -173,8 +176,10 @@ async function fetchClientBalance() {
 async function loadClientsToSelect() {
     const select = document.getElementById('client');
     if (!select) return;
-    const { data: clients } = await window.supa
-        .from('clients').select('id, name, balance').order('name');
+    const user = window.currentUserData;
+    let qc = window.supa.from('clients').select('id, name, balance').order('name');
+    if (typeof applyBranchFilter === 'function') qc = applyBranchFilter(qc, user);
+    const { data: clients } = await qc;
     if (!clients) return;
     select.innerHTML = '<option value="">اختر العميل...</option>';
     clients.forEach(c => {
@@ -191,8 +196,10 @@ async function loadClientsTable() {
     if (!container) return;
     container.innerHTML = '<div class="text-center p-3"><i class="fa fa-spin fa-circle-notch"></i></div>';
 
-    const { data: clients, error } = await window.supa
-        .from('clients').select('*').order('name');
+    const user = window.currentUserData;
+    let qt = window.supa.from('clients').select('*').order('name');
+    if (typeof applyBranchFilter === 'function') qt = applyBranchFilter(qt, user);
+    const { data: clients, error } = await qt;
 
     if (error || !clients) {
         container.innerHTML = '<div class="text-center text-danger small p-3">خطأ في التحميل</div>';
@@ -250,7 +257,7 @@ async function addClient() {
     if (!name) return showToast("⚠️ أدخل اسم العميل", false);
     setLoading('btnAddClient', true);
     try {
-        const { error } = await window.supa.from('clients').insert([{ name, number: phone, balance: 0 }]);
+        const { error } = await window.supa.from('clients').insert([{ name, number: phone, balance: 0, branch_id: window.currentUserData?.branch_id || null }]);
         if (error) throw error;
         showToast("✅ تم إضافة العميل", true);
         if (nameEl)  nameEl.value  = '';
@@ -319,9 +326,14 @@ function showManageTab(el) {
     if (tab) tab.style.display = 'block';
     el.classList.add('active');
     if      (tabId === 'clients-tab')  loadClientsTable();
-    else if (tabId === 'accounts-tab') { if (typeof loadAccountsTable === 'function') loadAccountsTable(); }
+    else if (tabId === 'accounts-tab') { if (typeof loadAccountsTable  === 'function') loadAccountsTable(); }
     else if (tabId === 'users-tab')    loadUsersList();
-    else if (tabId === 'logs-tab')     { if (typeof loadAdminLogs    === 'function') loadAdminLogs(); }
+    else if (tabId === 'logs-tab')     { if (typeof loadAdminLogs      === 'function') loadAdminLogs(); }
+    else if (tabId === 'branches-tab') {
+        if (typeof loadBranchesTable    === 'function') loadBranchesTable();
+        if (typeof populateBranchSelect === 'function') populateBranchSelect('assignBranchSelect');
+        if (typeof loadUsersForAssign   === 'function') loadUsersForAssign();
+    }
 }
 
 // ✅ searchTimeout معرّف هنا بس — اتشال من transactions.js
