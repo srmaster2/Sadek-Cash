@@ -172,10 +172,9 @@ async function loadAdminLogs() {
                 <thead>
                     <tr class="text-muted border-bottom" style="font-size: 11px; background-color: #f8f9fa;">
                         <th style="width: 15%;" class="py-2 pr-3 text-start">الوقت</th>
-                        <th style="width: 20%;" class="py-2 text-center">المسؤول</th>
                         <th style="width: 20%;" class="py-2 text-center">الإجراء</th>
-                        <th style="width: 45%;" class="py-2 text-end pl-3">التفاصيل</th>
-                    </tr>
+                        <th style="width: 45%;" class="py-2 text-center">التفاصيل</th>
+                        <th style="width: 20%;" class="py-2 text-center">المسؤول</th> </tr>
                 </thead>
                 <tbody style="font-size: 12.5px;">`;
 
@@ -189,10 +188,9 @@ async function loadAdminLogs() {
             html += `
                 <tr class="border-bottom hover-row">
                     <td class="text-start text-muted english-num" style="font-size: 11px;">${logTime}</td>
-                    <td class="text-center fw-bold text-dark">${log.created_by || 'النظام'}</td>
                     <td class="text-center"><span class="badge bg-light text-primary border-0">${log.action}</span></td>
-                    <td class="text-end text-secondary" style="line-height: 1.4;">${log.details || '---'}</td>
-                </tr>`;
+                    <td class="text-center text-secondary" style="line-height: 1.4;">${log.details || '---'}</td>
+                    <td class="text-center fw-bold text-dark">${log.created_by || 'النظام'}</td> </tr>`;
         });
 
         html += `</tbody></table></div>`;
