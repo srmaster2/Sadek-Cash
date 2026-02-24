@@ -6,15 +6,22 @@ async function getCurrentUser() {
   if (!user) return { role: 'GUEST', email: '', isMaster: false };
 
   // نستخدم .single() هنا لأن البريد الإلكتروني فريد لكل مستخدم
-  const { data, error } = await supabase.from(TABLES.users).select('*').eq('email', user.email).maybeSingle(); 
-  
-  if (!error && data) {
+const { data, error } = await supabase
+    .from(TABLES.users)
+    .select('*, branches(name, location)')   // ← تعديل هنا
+    .eq('email', user.email)
+    .maybeSingle(); 
+
+if (!error && data) {
     return {
-      role: data.role || 'USER',
-      email: user.email,
-      name: data.name || user.email,
-      isMaster: data.is_master || false    };
-  }
+        role: data.role || 'USER',
+        email: user.email,
+        name: data.name || user.email,
+        isMaster: data.is_master || false,
+        branch_id: data.branch_id || null,            // ← جديد
+        branchName: data.branches?.name || 'الرئيسي'  // ← جديد
+    };
+}
   // إذا لم يكن في جدول users أضفه كمستخدم عادي
   await supabase.from(TABLES.users).insert({
     email: user.email,
