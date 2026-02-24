@@ -1,8 +1,3 @@
-// ============================================================
-// transactions.js — Sadek Cash (Supabase)
-// ملاحظة: searchTimeout, loadClientsToSelect, getTransactionLogs
-//         كلهم معرّفين في utils.js بس — مش هنا
-// ============================================================
 let dynamicLockList = []; // سيتم ملؤها تلقائياً بأسماء الشركات من قاعدة البيانات
 var globalPendingData = null;
 var selectedProvider  = "";
@@ -224,6 +219,13 @@ async function openProviderSelect(serviceKey, element) {
         console.error('Fetch Error:', e);
         grid.innerHTML = '<div class="alert alert-danger mx-3">فشل تحميل بيانات الشركات</div>';
     }
+}
+function confirmProviderSelection(serviceKey, provider) {
+    const config = serviceMap[serviceKey];
+    if (!config) return;
+    closeProviderModal();
+    const originalCard = document.querySelector(`.op-card[onclick*="${serviceKey}"]`);
+    setOp(config.buildTitle(provider), provider, originalCard);
 }
 function closeProviderModal() {
     const modal = document.getElementById('providerModal');
@@ -710,8 +712,8 @@ async function finalExecuteStep(btn) {
         }
 
         const { error: txErr } = await _supa().from('transactions').insert([{
-            date:          now.toLocaleDateString('en-CA'),
-            time:          now.toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' }),
+            date:          now.toLocaleDateString('en-GB'),
+            time:          now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }),
             type, amount: val, commission: fee,
             wallet_name: walletName, provider,
             balance_after: balanceAfter,
@@ -910,11 +912,25 @@ async function rollbackTx(txId) {
         await _supa().from('accounts').update(upd.changes).eq('id', upd.id);
 
     await _supa().from('transactions').delete().eq('id', txId);
-    await _supa().from('admin_logs').insert([{
-        action: 'ROLLBACK', details: `تراجع: ${tx.type} بمبلغ ${val}`,
-        created_by: (await getSession())?.user?.email
-    }]);
+const session = await getSession();
+const userId = session?.user?.id;
 
+// 2. جلب الاسم من جدول users باستخدام الـ id
+const { data: profile } = await _supa()
+    .from('users')
+    .select('name')
+    .eq('id', userId)
+    .single();
+
+// 3. تخزين الاسم في متغير (ووضع الإيميل كخيار احتياطي إذا كان الاسم فارغاً)
+const adminName = profile?.name || session?.user?.email;
+
+// 4. الآن قم بعملية الإدراج في الـ logs
+await _supa().from('admin_logs').insert([{
+    action: 'ROLLBACK', 
+    details: `تراجع: ${tx.type} بمبلغ ${val}`,
+    created_by: adminName // سيتم تخزين الاسم الآن وليس الميل
+}]);
     showToast("✅ تم التراجع بنجاح", true);
     if (typeof loadTransactionLogs === "function") loadTransactionLogs();
     if (typeof loadDash            === "function") loadDash();
@@ -951,3 +967,4 @@ window.addEventListener('DOMContentLoaded', function() {
     if (typeof renderWalletsCards === "function") renderWalletsCards();
     if (typeof loadDash           === "function") loadDash();
 });
+
