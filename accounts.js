@@ -197,20 +197,20 @@ async function openEditAccountModal(id) {
         html: `
             <div style="direction: rtl; text-align: right;">
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">اسم الحساب / الرقم</label>
+                    <label class="swal2-input">اسم الحساب / الرقم</label>
                     <input id="edit-n" class="form-control form-control-sm" value="${acc.name}">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">الرصيد الحالي (ج.م)</label>
+                    <label class="swal2-input">الرصيد الحالي (ج.م)</label>
                     <input id="edit-b" type="number" class="form-control form-control-sm english-num" value="${acc.balance}">
                 </div>
                 <div class="row g-2">
                     <div class="col-6">
-                        <label class="form-label small fw-bold text-muted">حد السحب اليومي</label>
+                        <label class="swal2-input">حد السحب اليومي</label>
                         <input id="edit-lo" type="number" class="form-control form-control-sm" value="${acc.daily_out_limit || 0}">
                     </div>
                     <div class="col-6">
-                        <label class="form-label small fw-bold text-muted">حد الإيداع اليومي</label>
+                        <label class="swal2-input">حد الإيداع اليومي</label>
                         <input id="edit-li" type="number" class="form-control form-control-sm" value="${acc.daily_in_limit || 0}">
                     </div>
                 </div>
@@ -650,19 +650,21 @@ async function saveUserRole() {
     try {
         setLoading('btnSaveRole', true);
 
-        // 2. التحقق من صلاحيتك كـ ADMIN
+        // 2. التحقق من صلاحيتك كـ Master (التعديل هنا)
         const { data: currentUserData, error: fetchError } = await supabase
             .from('users')
-            .select('role')
+            .select('is_master') // لازم نطلب الـ column ده عشان نستخدمه
             .eq('id', user.id)
             .single();
 
-        if (fetchError || !currentUserData.is_master) {
-            showToast('🚫 ليس لديك صلاحية تعديل الأدوار', false);
+        // فحص: هل المستخدم موجود وهل هو Master؟
+        if (fetchError || !currentUserData || !currentUserData.is_master) {
+            showToast('🚫 ليس لديك صلاحية Master لتعديل الأدوار', false);
+            setLoading('btnSaveRole', false);
             return; 
         }
 
-        // 3. الحصول على البيانات الجديدة
+        // 3. الحصول على البيانات الجديدة من الـ UI
         const emailToUpdate = document.getElementById('editRoleEmail').value;
         const newRole = document.getElementById('newRoleSelect').value;
 
@@ -675,18 +677,17 @@ async function saveUserRole() {
         if (updateError) throw updateError;
 
         showToast('✅ تم تحديث الصلاحية بنجاح', true);
-        closeEditRole();
+        
+        // إغلاق المودال (تأكد أن الوظيفة موجودة بهذا الاسم)
+        if (typeof closeEditRole === 'function') closeEditRole();
 
-        // --- الجزء الخاص بالتحكم في الريفريش والحجب الفوري ---
-
-        // أ: إذا كان المستخدم الذي تم تعديله هو "أنت" (صاحب الجلسة الحالية)
+        // 5. إدارة التحديث الفوري
         if (user.email === emailToUpdate) {
             showToast('🔄 جاري تحديث صلاحياتك...', true);
             setTimeout(() => {
-                window.location.reload(); // إعادة تحميل الصفحة لتطبيق الحجب الشامل
+                window.location.reload(); 
             }, 1000);
         } else {
-            // ب: إذا كان شخصاً آخر، نحدث القائمة فقط بدون ريفريش
             if (typeof loadUsersList === 'function') {
                 await loadUsersList();
             }

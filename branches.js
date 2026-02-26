@@ -440,11 +440,11 @@ window.openAddBranchModal = async function () {
         html: `
             <div style="direction:rtl;text-align:right;">
                 <div class="mb-3">
-                    <label class="form-label fw-bold small">اسم الفرع *</label>
+                    <label class="swal2-input">اسم الفرع *</label>
                     <input id="sb-name" class="form-control" placeholder="مثال: فرع القاهرة">
                 </div>
                 <div>
-                    <label class="form-label fw-bold small">الموقع</label>
+                    <label class="swal2-input">الموقع</label>
                     <input id="sb-loc" class="form-control" placeholder="مثال: شارع التحرير">
                 </div>
             </div>`,
@@ -467,11 +467,11 @@ window.openEditBranchModal = async function (id, name, location) {
         html: `
             <div style="direction:rtl;text-align:right;">
                 <div class="mb-3">
-                    <label class="form-label fw-bold small">اسم الفرع *</label>
+                    <label class="swal2-input">اسم الفرع *</label>
                     <input id="sb-name" class="form-control" value="${name}">
                 </div>
                 <div>
-                    <label class="form-label fw-bold small">الموقع</label>
+                    <label class="swal2-input">الموقع</label>
                     <input id="sb-loc" class="form-control" value="${location}">
                 </div>
             </div>`,
