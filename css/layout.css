@@ -47,6 +47,7 @@
   width: 100% !important;
   max-width: 100% !important;
   flex: 0 0 100% !important;
+  display: none !important; /* مخفي افتراضياً — الـ JS يظهر اللي active */
 }
 /* الـ JS يضيف lyt-tab-hidden على اللي مش active */
 #view-op.lyt-tabs .lyt-tab-hidden { display: none !important; }
