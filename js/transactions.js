@@ -832,10 +832,10 @@ async function finalExecuteStep(btn) {
             if (error) throw error;
         }
 
-        // جلب اسم العميل من الـ <select> لحفظه في قاعدة البيانات
-        const _clientEl   = document.getElementById('client');
-        const _clientName = clientId
-            ? (_clientEl?.options[_clientEl?.selectedIndex]?.text || '').replace(/\s*\(.*\)/,'').trim()
+        // جلب اسم العميل من الـ select عشان نحفظه نص في الـ DB
+        const _cEl   = document.getElementById('client');
+        const _cName = clientId
+            ? (_cEl?.options[_cEl?.selectedIndex]?.text || '').replace(/\s*\(.*\)/,'').trim()
             : '';
 
         const { error: txErr } = await _supa().from('transactions').insert([{
@@ -844,11 +844,12 @@ async function finalExecuteStep(btn) {
             type, amount: val, commission: fee,
             wallet_name: walletName, provider,
             balance_after: balanceAfter,
-            notes: note || '', added_by: userName,
-            client:      _clientName || '',
-            comm_dest:   commDest   || 'CASH',
+            notes:       note      || '',
+            added_by:    userName,
+            client:      _cName    || '',
+            comm_dest:   commDest  || 'CASH',
             deduct_comm: deductComm || false,
-            branch_id: window.currentUserData?.branch_id || null
+            branch_id:   window.currentUserData?.branch_id || null
         }]);
         if (txErr) throw txErr;
 
@@ -1154,63 +1155,86 @@ await _supa().from('admin_logs').insert([{
 
 
 // ============================================================
-// 10. showDetails — تفاصيل العملية
+// 10-A. _getTxFlow — مسار العملية الصح
 // ============================================================
-
-// ── تحليل مسار العملية: من أين ← إلى أين ──
+// القاعدة: السهم يمثل اتجاه الفلوس الحقيقي
+// FROM (مصدر الفلوس)  ←  TO (المستلم)
+//
+// دفع فاتورة (فوري وغيره): الخزنة/المحفظة ← الشركة
+// سحب دين:               الخزنة/المحفظة ← العميل    (بنديله)
+// سداد مديونية:           العميل ← الخزنة/المحفظة  (بيرجعلنا)
+// تزويد:                 المحفظة ← الشركة
+// إيداع محفظة:            الخزنة ← المحفظة
+// سحب من محفظة:           المحفظة ← الخزنة
+// سحب من عميل/فيزا:       العميل/الشركة ← الخزنة
+// مصاريف:                الخزنة ← مصاريف
+// ============================================================
 function _getTxFlow(tx) {
-    const t  = (tx.type || '').trim();
+    const t  = (tx.type        || '').trim();
     const w  = (tx.wallet_name || '').trim();
-    const p  = (tx.provider || '').trim();
-    const cl = (tx.client || '').trim();
+    const p  = (tx.provider    || '').trim();
+    const cl = (tx.client      || '').trim();
     const SAFE = 'الخزنة';
 
-    // تزويد أو سحب كاش لشركة: المحفظة/الخزنة ← الشركة
-    if (/تزويد/.test(t))
+    // دفع فواتير (فوري، وي، اورنچ...) — الخزنة/المحفظة تدفع للشركة
+    if (/فاتورة|دفع فاتورة|دفع بيل|pay.*bill/i.test(t)) {
+        const src = (w && w !== p) ? w : SAFE;
+        return { from: src, to: p || '—', icon: 'fa-file-invoice', color: '#8b5cf6' };
+    }
+
+    // تزويد — المحفظة تزوّد الشركة
+    if (/تزويد/.test(t)) {
         return { from: w || SAFE, to: p || '—', icon: 'fa-money-bill-transfer', color: '#f59e0b' };
+    }
 
-    // سحب كاش (تزويد لشركة): محفظة ← شركة
-    if (/سحب كاش/.test(t) && p && p !== 'SAFE')
+    // سحب كاش لشركة (تزويد بطريقة ثانية)
+    if (/سحب كاش/.test(t) && p && p !== 'SAFE' && p !== SAFE) {
         return { from: w || SAFE, to: p, icon: 'fa-money-bill-transfer', color: '#f59e0b' };
+    }
 
-    // إيداع لمحفظة: الخزنة ← المحفظة
-    if (/إيداع/.test(t))
+    // إيداع لمحفظة — الخزنة تودع في المحفظة
+    if (/إيداع/.test(t)) {
         return { from: SAFE, to: w || '—', icon: 'fa-upload', color: '#3b82f6' };
+    }
 
-    // سحب من محفظة: المحفظة ← الخزنة
-    if (/سحب من محفظة/.test(t))
+    // سحب من محفظة — المحفظة تسحب للخزنة
+    if (/سحب من محفظة/.test(t)) {
         return { from: w || '—', to: SAFE, icon: 'fa-download', color: '#10b981' };
+    }
 
-    // سحب دين (أعطى العميل من الخزنة): الخزنة/المحفظة ← العميل
-    if (/سحب دين/.test(t))
+    // سحب دين — الخزنة تدي للعميل (بندينه)
+    if (/سحب دين/.test(t)) {
         return { from: w || SAFE, to: cl || '—', icon: 'fa-user-minus', color: '#ef4444' };
+    }
 
-    // سداد مديونية (العميل سدد): العميل ← الخزنة/المحفظة
-    if (/سداد|مديونية/.test(t))
+    // سداد مديونية — العميل يرجعلنا للخزنة
+    if (/سداد|مديونية/.test(t)) {
         return { from: cl || '—', to: w || SAFE, icon: 'fa-user-check', color: '#10b981' };
+    }
 
-    // سحب من عميل / سحب فيزا: العميل/الشركة ← الخزنة
-    if (/سحب من عميل|سحب فيزا/.test(t))
+    // سحب من عميل / فيزا — العميل/الشركة تدي للخزنة
+    if (/سحب من عميل|سحب فيزا|client.*withdraw/i.test(t)) {
         return { from: cl || p || '—', to: w || SAFE, icon: 'fa-arrow-down', color: '#10b981' };
+    }
 
-    // دفع فواتير: الخزنة/المحفظة ← الشركة
-    if (/فاتورة|دفع فاتورة|دفع بيل/.test(t))
-        return { from: w || SAFE, to: p || '—', icon: 'fa-file-invoice', color: '#8b5cf6' };
-
-    // مصاريف: الخزنة ← مصاريف
-    if (/مصروف|مصاريف/.test(t))
+    // مصاريف — خارجة من الخزنة
+    if (/مصروف|مصاريف/.test(t)) {
         return { from: SAFE, to: 'مصاريف', icon: 'fa-coins', color: '#f97316' };
+    }
 
-    // افتراضي
+    // fallback
     const isOut = /سحب|صادر|مصروف|فاتورة/.test(t);
     return {
-        from:  isOut ? (w || SAFE) : (cl || p || '—'),
-        to:    isOut ? (cl || p || '—') : (w || SAFE),
-        icon:  isOut ? 'fa-arrow-up' : 'fa-arrow-down',
-        color: isOut ? '#ef4444' : '#10b981'
+        from:  isOut ? (w || SAFE)       : (cl || p || '—'),
+        to:    isOut ? (cl || p || '—')  : (w || SAFE),
+        icon:  isOut ? 'fa-arrow-up'     : 'fa-arrow-down',
+        color: isOut ? '#ef4444'         : '#10b981'
     };
 }
 
+// ============================================================
+// 10-B. showDetails
+// ============================================================
 async function showDetails(txId) {
     const modal   = document.getElementById('txDetailsModal');
     const content = document.getElementById('txd-content');
@@ -1224,7 +1248,6 @@ async function showDetails(txId) {
         </div>`;
 
     try {
-        // جلب العملية — بدون join (client نص، branch_id uuid)
         const { data: tx, error } = await _supa()
             .from('transactions')
             .select('*')
@@ -1234,47 +1257,51 @@ async function showDetails(txId) {
         if (error) throw new Error(error.message);
         if (!tx)   throw new Error('العملية غير موجودة');
 
-        // جلب اسم الفرع بـ query منفصل
+        // اسم الفرع — query منفصل لأن مفيش join FK
         let branchName = '';
         if (tx.branch_id) {
             const { data: br } = await _supa()
-                .from('branches').select('name').eq('id', tx.branch_id).maybeSingle();
+                .from('branches').select('name')
+                .eq('id', tx.branch_id).maybeSingle();
             branchName = br?.name || '';
         }
 
-        const isOut    = /سحب|صادر|مصروف|فاتورة/.test(tx.type || '');
         const flow     = _getTxFlow(tx);
-        const amt      = Number(tx.amount || 0).toLocaleString('en');
+        const isOut    = /سحب|صادر|مصروف|فاتورة/.test(tx.type || '');
+        const amt      = Number(tx.amount     || 0).toLocaleString('en');
         const comm     = Number(tx.commission || 0);
         const balAfter = Number(tx.balance_after || 0).toLocaleString('en');
 
-        // ── badge حسب نوع العملية ──
-        const BADGE_MAP = [
-            [/تزويد|سحب كاش/,        '#d97706', 'rgba(245,158,11,.13)',  'تزويد'],
-            [/إيداع/,                 '#2563eb', 'rgba(59,130,246,.13)',  'إيداع'],
-            [/سحب من محفظة/,          '#059669', 'rgba(16,185,129,.13)', 'سحب محفظة'],
-            [/سحب دين/,               '#dc2626', 'rgba(239,68,68,.13)',   'دين صادر'],
-            [/سداد|مديونية/,          '#059669', 'rgba(16,185,129,.13)', 'سداد دين'],
-            [/سحب من عميل|سحب فيزا/,  '#059669', 'rgba(16,185,129,.13)', 'وارد'],
-            [/فاتورة|دفع/,            '#7c3aed', 'rgba(139,92,246,.13)', 'فاتورة'],
-            [/مصروف|مصاريف/,          '#ea580c', 'rgba(249,115,22,.13)', 'مصروفات'],
+        // badge لون حسب نوع العملية
+        const BMAP = [
+            [/تزويد|سحب كاش/,        '#d97706','rgba(245,158,11,.13)','تزويد'      ],
+            [/إيداع/,                 '#2563eb','rgba(59,130,246,.13)','إيداع'      ],
+            [/سحب من محفظة/,          '#059669','rgba(16,185,129,.13)','سحب محفظة' ],
+            [/سحب دين/,               '#dc2626','rgba(239,68,68,.13)' ,'دين صادر'  ],
+            [/سداد|مديونية/,          '#059669','rgba(16,185,129,.13)','سداد دين'  ],
+            [/سحب من عميل|سحب فيزا/,  '#059669','rgba(16,185,129,.13)','وارد'      ],
+            [/فاتورة|دفع/,            '#7c3aed','rgba(139,92,246,.13)','فاتورة'    ],
+            [/مصروف|مصاريف/,          '#ea580c','rgba(249,115,22,.13)','مصروفات'   ],
         ];
-        let [btxt, bbg, blabel] = isOut
-            ? ['#dc2626', 'rgba(239,68,68,.13)', 'صادر']
-            : ['#059669', 'rgba(16,185,129,.13)', 'وارد'];
-        for (const [rx, t2, bg2, lb2] of BADGE_MAP) {
-            if (rx.test(tx.type || '')) { btxt = t2; bbg = bg2; blabel = lb2; break; }
+        let [btxt,bbg,blbl] = isOut
+            ? ['#dc2626','rgba(239,68,68,.13)','صادر']
+            : ['#059669','rgba(16,185,129,.13)','وارد'];
+        for (const [rx,t2,bg2,lb2] of BMAP) {
+            if (rx.test(tx.type||'')) { btxt=t2; bbg=bg2; blbl=lb2; break; }
         }
 
-        // ── صف تفصيل ──
-        const mkRow = (icon, label, value, cls='') => !value ? '' : `
+        // helper صف
+        const row = (ico,lbl,val,cls='') => val ? `
             <div class="txd-row ${cls}">
-                <div class="txd-row-label"><i class="fa fa-fw ${icon}"></i>${label}</div>
-                <div class="txd-row-val">${value}</div>
-            </div>`;
+                <div class="txd-row-label"><i class="fa fa-fw ${ico}"></i>${lbl}</div>
+                <div class="txd-row-val">${val}</div>
+            </div>` : '';
 
-        // ── نحدد إذا نعرض "الشركة" — مش للديون اللي provider = SAFE ──
-        const showProvider = tx.provider && tx.provider !== 'SAFE' && tx.provider !== 'الخزنة';
+        // مش نعرض provider لو هو نفس wallet_name أو SAFE أو الخزنة
+        const showProv = tx.provider
+            && tx.provider !== 'SAFE'
+            && tx.provider !== 'الخزنة'
+            && tx.provider !== tx.wallet_name;
 
         content.innerHTML = `
             <div class="txd-hero">
@@ -1282,65 +1309,76 @@ async function showDetails(txId) {
                     <i class="fa fa-fw ${flow.icon}" style="color:${flow.color};font-size:19px;"></i>
                 </div>
                 <div class="txd-hero-info">
-                    <div class="txd-hero-type">${esc(tx.type) || '—'}</div>
+                    <div class="txd-hero-type">${esc(tx.type)||'—'}</div>
                     <div class="txd-hero-amount" style="color:${flow.color}">
                         ${amt}<span> ج.م</span>
                     </div>
                 </div>
                 <span class="txd-hero-badge" style="background:${bbg};color:${btxt};">
-                    ${blabel}
+                    ${blbl}
                 </span>
             </div>
 
-            <div style="padding:11px 16px 13px;border-bottom:1px solid var(--border-color,rgba(0,0,0,.06));
+            <div style="padding:11px 16px 13px;
+                        border-bottom:1px solid var(--border-color,rgba(0,0,0,.06));
                         background:var(--bg-secondary,#f8fafc);">
-                <div style="font-size:10.5px;color:var(--text-muted,#6b7280);font-weight:700;
-                            letter-spacing:.04em;margin-bottom:8px;">
+                <div style="font-size:10px;color:var(--text-muted,#6b7280);font-weight:700;
+                            letter-spacing:.05em;margin-bottom:9px;text-transform:uppercase;">
                     <i class="fa fa-fw fa-route me-1" style="color:${flow.color};"></i>مسار العملية
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                    <span style="background:var(--bg-card,#fff);border:1.5px solid var(--border-color,#e5e7eb);
-                                 border-radius:10px;padding:5px 11px;font-size:12.5px;font-weight:800;
-                                 color:var(--card-text,#1a2035);max-width:128px;
-                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                    <span style="background:var(--bg-card,#fff);
+                                 border:1.5px solid var(--border-color,#e2e8f0);
+                                 border-radius:10px;padding:5px 12px;
+                                 font-size:12.5px;font-weight:800;
+                                 color:var(--card-text,#1a2035);
+                                 max-width:130px;white-space:nowrap;
+                                 overflow:hidden;text-overflow:ellipsis;"
                           title="${esc(flow.from)}">${esc(flow.from)}</span>
-                    <i class="fa fa-fw fa-arrow-left" style="color:${flow.color};font-size:12px;flex-shrink:0;"></i>
-                    <span style="background:var(--bg-card,#fff);border:1.5px solid var(--border-color,#e5e7eb);
-                                 border-radius:10px;padding:5px 11px;font-size:12.5px;font-weight:800;
-                                 color:var(--card-text,#1a2035);max-width:128px;
-                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                    <span style="display:flex;align-items:center;justify-content:center;
+                                 width:24px;height:24px;border-radius:50%;
+                                 background:${bbg};flex-shrink:0;">
+                        <i class="fa fa-fw fa-arrow-left" style="color:${flow.color};font-size:10px;"></i>
+                    </span>
+                    <span style="background:var(--bg-card,#fff);
+                                 border:1.5px solid var(--border-color,#e2e8f0);
+                                 border-radius:10px;padding:5px 12px;
+                                 font-size:12.5px;font-weight:800;
+                                 color:var(--card-text,#1a2035);
+                                 max-width:130px;white-space:nowrap;
+                                 overflow:hidden;text-overflow:ellipsis;"
                           title="${esc(flow.to)}">${esc(flow.to)}</span>
                 </div>
             </div>
 
             <div class="txd-grid">
-                ${mkRow('fa-calendar-alt',  'التاريخ',    esc(tx.date) || '—')}
-                ${mkRow('fa-clock',         'الوقت',      esc(tx.time) || '—')}
-                ${mkRow('fa-wallet',        'الحساب',     esc(tx.wallet_name) || '—')}
-                ${showProvider ? mkRow('fa-building', 'الشركة', esc(tx.provider)) : ''}
-                ${tx.client ? mkRow('fa-user', 'العميل', esc(tx.client)) : ''}
+                ${row('fa-calendar-alt',  'التاريخ',    esc(tx.date)||'—')}
+                ${row('fa-clock',         'الوقت',      esc(tx.time)||'—')}
+                ${row('fa-wallet',        'الحساب',     esc(tx.wallet_name)||'—')}
+                ${showProv ? row('fa-building','الشركة', esc(tx.provider)) : ''}
+                ${tx.client ? row('fa-user','العميل', esc(tx.client)) : ''}
                 ${comm > 0 ? `
                 <div class="txd-row txd-highlight">
                     <div class="txd-row-label"><i class="fa fa-fw fa-coins"></i>العمولة</div>
                     <div class="txd-row-val txd-comm">${comm.toLocaleString('en')} ج.م</div>
                 </div>` : ''}
-                ${mkRow('fa-scale-balanced', 'الرصيد بعد',
+                ${row('fa-scale-balanced','الرصيد بعد',
                     `<span class="txd-mono">${balAfter} ج.م</span>`)}
                 ${tx.notes ? `
                 <div class="txd-row">
                     <div class="txd-row-label"><i class="fa fa-fw fa-note-sticky"></i>ملاحظات</div>
                     <div class="txd-row-val txd-notes">${esc(tx.notes)}</div>
                 </div>` : ''}
-                ${mkRow('fa-user-circle',   'بواسطة',     esc(tx.added_by) || '—')}
-                ${branchName ? mkRow('fa-code-branch', 'الفرع', esc(branchName)) : ''}
+                ${row('fa-user-circle',   'بواسطة',     esc(tx.added_by)||'—')}
+                ${branchName ? row('fa-code-branch','الفرع', esc(branchName)) : ''}
             </div>
 
             <div class="txd-footer">
                 <div class="txd-id">
                     <i class="fa fa-fw fa-hashtag" style="font-size:9px;"></i>
                     #${tx.id}
-                    <span style="opacity:.35;margin:0 5px;">|</span>
-                    ${esc(tx.date) || ''} ${esc(tx.time) || ''}
+                    <span style="opacity:.3;margin:0 5px;">|</span>
+                    ${esc(tx.date)||''} ${esc(tx.time)||''}
                 </div>
             </div>`;
 
